@@ -99,7 +99,7 @@ def set_x_ticks(fig, ax, times):
 
 
 # Define alpha and initialize moving averages
-alpha = 0.5  # Example value, adjust as needed
+alpha = 0.2  # Example value, adjust as needed
 avg_temp = 0
 avg_co2 = 0
 avg_humidity = 0
