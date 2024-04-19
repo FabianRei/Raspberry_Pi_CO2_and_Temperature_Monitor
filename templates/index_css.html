@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CO2, Temperature and Humidity Monitoring</title>
+    <style>
+        /* General body styles */
+        body {
+            font-family: Arial, sans-serif;
+        }
+        /* Styling for the readings */
+        .readings {
+            font-size: 17px; /* Larger font size */
+            margin-bottom: 10px; /* Space between each reading */
+        }
+        .label {
+            display: inline-block; /* Keeps label inline */
+            width: 120px; /* Ensures consistent spacing between labels and values */
+        }
+        .value {
+            font-weight: bold; /* Make values bold */
+            display: inline; /* Keeps values inline */
+        }
+    </style>
+</head>
+<body>
+    <h2>Current Readings</h2>
+    <div class="readings">
+        <span class="label">Temperature:</span>
+        <span class="value">{{ last_temperature }}°C</span>
+    </div>
+    <div class="readings">
+        <span class="label">CO2:</span>
+        <span class="value">{{ last_co2 }} ppm</span>
+    </div>
+    <div class="readings">
+        <span class="label">Humidity:</span>
+        <span class="value">{{ last_humidity }}%</span>
+    </div>
+    <h2>Plots of the Last 24 Hours</h2>
+    <img src="{{ url_for('plot_temperature') }}" alt="Temperature Plot">
+    <img src="{{ url_for('plot_co2') }}" alt="CO2 Plot">
+    <img src="{{ url_for('plot_humidity') }}" alt="Humidity Plot">
+</body>
+</html>
+

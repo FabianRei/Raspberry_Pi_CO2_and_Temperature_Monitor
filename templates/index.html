@@ -8,6 +8,7 @@
     <h1>Current Readings</h1>
     <p>Temperature: {{ last_temperature }}°C</p>
     <p>CO2: {{ last_co2 }} ppm</p>
+    <p>Humidity: {{ last_humidity }}%</p>
     <h2>Plots of the Last 24 Hours</h2>
     <img src="{{ url_for('plot_temperature') }}" alt="Temperature Plot">
     <img src="{{ url_for('plot_co2') }}" alt="CO2 Plot">
