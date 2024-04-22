@@ -23,7 +23,7 @@ def get_latest_record():
 
 
 def initialize_averages():
-    global avg_temp, avg_co2
+    global avg_temp, avg_co2, avg_humidity
     last_record = get_latest_record()
     if last_record:
         _, avg_temp, avg_co2, avg_humidity = last_record
