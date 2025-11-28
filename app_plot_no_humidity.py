@@ -3,7 +3,7 @@ from flask import Flask, render_template, send_file
 from matplotlib.figure import Figure
 import io
 from mod_co2modnitor import get_all
-from general_humidity_sensor_dht22 import get_temp_humidity
+# from general_humidity_sensor_dht22 import get_temp_humidity  # <--- DISABLED
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
 import sqlite3
@@ -36,55 +36,42 @@ def get_latest_record():
 
 
 def initialize_averages():
-    global avg_temp, avg_co2, avg_humidity
+    global avg_temp, avg_co2
     last_record = get_latest_record()
     if last_record:
-        _, avg_temp, avg_co2, avg_humidity = last_record
+        # We still unpack 4 values because the DB has 4 columns, but we ignore humidity
+        _, avg_temp, avg_co2, _ = last_record
     else:
-        avg_temp = 0  # or some default/placeholder value
-        avg_co2 = 0   # or some default/placeholder value
-        avg_humidity = 0  # Default value
+        avg_temp = 0  
+        avg_co2 = 0   
 
 
 def fetch_sensor_data():
-    # --- MODIFIED ---
-    # Added global raw variables
-    global avg_temp, avg_co2, avg_humidity
-    global last_raw_temp, last_raw_co2, last_raw_humidity
-    # ----------------
+    global avg_temp, avg_co2
+    global last_raw_temp, last_raw_co2
 
     co2_data = get_all('/dev/hidraw0')
-    humidity_data = get_temp_humidity()
-
+    
+    # Humidity is completely ignored now
+    
     if co2_data is not None:
         # Update moving average
         avg_temp = alpha * co2_data['Temperature'] + (1 - alpha) * avg_temp
         avg_co2 = alpha * co2_data['CO2'] + (1 - alpha) * avg_co2
-        
-        # --- ADDED ---
+
         # Store last raw measurement
         last_raw_temp = co2_data['Temperature']
         last_raw_co2 = co2_data['CO2']
-        # -------------
-
-    if humidity_data is not None and humidity_data['humidity'] is not None:
-        # Update moving average
-        avg_humidity = alpha * humidity_data['humidity'] + (1 - alpha) * avg_humidity
-        
-        # --- ADDED ---
-        # Store last raw measurement
-        last_raw_humidity = humidity_data['humidity']
-        # -------------
 
 
 def write_sensor_data():
     with sqlite3.connect('sensor_data.db') as conn:
         cursor = conn.cursor()
-        # Note: This correctly writes the AVERAGES to the DB
+        # We write 'None' into the humidity column to keep the DB structure valid
         cursor.execute('''
         INSERT INTO measurements (time, temperature, co2, humidity)
         VALUES (?, ?, ?, ?)
-        ''', (datetime.datetime.now(), avg_temp, avg_co2, avg_humidity))
+        ''', (datetime.datetime.now(), avg_temp, avg_co2, None))
         conn.commit()
 
 
@@ -95,8 +82,8 @@ def get_records_for_plotting(select_columns='*', time_period_hours=24):
     conn = sqlite3.connect('sensor_data.db')
     cursor = conn.cursor()
     query = f'''
-        SELECT {select_columns} FROM measurements 
-        WHERE time >= ? 
+        SELECT {select_columns} FROM measurements
+        WHERE time >= ?
         ORDER BY time ASC
     '''
     cursor.execute(query, (one_day_ago_str,))
@@ -106,10 +93,10 @@ def get_records_for_plotting(select_columns='*', time_period_hours=24):
 
 
 def set_x_ticks(fig, ax, times):
-    if not times: # Handle case with no data
+    if not times: 
         return
     time_range = max(times) - min(times)
-    
+
     if time_range <= datetime.timedelta(hours=6):
         interval = 1
     else:
@@ -127,14 +114,10 @@ def set_x_ticks(fig, ax, times):
 alpha = 0.2
 avg_temp = 0
 avg_co2 = 0
-avg_humidity = 0
 
-# --- ADDED ---
 # Define globals for last raw measurement
 last_raw_temp = None
 last_raw_co2 = None
-last_raw_humidity = None
-# -------------
 
 # Initialize moving averages with the latest record
 initialize_averages()
@@ -143,7 +126,7 @@ initialize_averages()
 fetch_sensor_data()
 write_sensor_data()
 
-# Scheduler to fetch data every minute and write data every 5 minutes
+# Scheduler
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=fetch_sensor_data, trigger="interval", minutes=1)
 scheduler.add_job(func=write_sensor_data, trigger="interval", minutes=5)
@@ -153,38 +136,31 @@ scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
 
 
-# --- COMPLETELY REPLACED THIS FUNCTION ---
 @app.route('/')
 def index():
     # 1. Fetch the last AVERAGE record from the database
     last_avg_record = get_latest_record()
     if last_avg_record:
-        _, avg_temp_db, avg_co2_db, avg_humidity_db = last_avg_record
+        _, avg_temp_db, avg_co2_db, _ = last_avg_record
         avg_temp = round(float(avg_temp_db), 2)
         avg_co2 = round(float(avg_co2_db), 2)
-        avg_humidity = round(float(avg_humidity_db), 2) if avg_humidity_db is not None else 'N/A'
     else:
-        avg_temp, avg_co2, avg_humidity = 'N/A', 'N/A', 'N/A'
+        avg_temp, avg_co2 = 'N/A', 'N/A'
 
     # 2. Access the global RAW variables from memory
-    global last_raw_temp, last_raw_co2, last_raw_humidity
+    global last_raw_temp, last_raw_co2
     raw_temp = round(last_raw_temp, 2) if last_raw_temp is not None else 'N/A'
     raw_co2 = round(last_raw_co2, 2) if last_raw_co2 is not None else 'N/A'
-    raw_humidity = round(last_raw_humidity, 2) if last_raw_humidity is not None else 'N/A'
 
-    # 3. Pass BOTH sets of data to the template
+    # 3. Pass data to template - REMOVED HUMIDITY ARGUMENTS
     return render_template(
-        'index_css.html', 
-        # These are the 5-min Averages from DB
-        last_temperature=avg_temp, 
-        last_co2=avg_co2, 
-        last_humidity=avg_humidity,
-        # These are the 1-min Raw values from memory
+        'index_css.html',
+        last_temperature=avg_temp,
+        last_co2=avg_co2,
         raw_temperature=raw_temp,
-        raw_co2=raw_co2,
-        raw_humidity=raw_humidity
+        raw_co2=raw_co2
+        # humidity arguments deleted
     )
-# ------------------------------------------
 
 @app.route('/plot/temperature')
 def plot_temperature():
@@ -220,22 +196,7 @@ def plot_co2():
     buf.seek(0)
     return send_file(buf, mimetype='image/png')
 
-@app.route('/plot/humidity')
-def plot_humidity():
-    records = get_records_for_plotting(select_columns='time, humidity', time_period_hours=24)
-    times, humidities = zip(*records) if records else ([], [])
-    times = [datetime.datetime.fromisoformat(t) for t in times]
-    fig = Figure()
-    ax = fig.subplots()
-    ax.plot(times, humidities)
-    set_x_ticks(fig, ax, times)
-    ax.set_title('Humidity over the Last 24 Hours')
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Humidity (%)')
-    buf = io.BytesIO()
-    fig.savefig(buf, format='png', bbox_inches='tight')
-    buf.seek(0)
-    return send_file(buf, mimetype='image/png')
+# REMOVED @app.route('/plot/humidity') entirely
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
